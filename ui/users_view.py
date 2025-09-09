@@ -5,15 +5,14 @@ from PySide6.QtWidgets import (
     QMessageBox, QAbstractItemView
 )
 from .user_form import UserFormDialog
-from typing import Set
 
 class UsersView(QWidget):
-    def __init__(self, auth_service, permset: Set[str] | None = None ):
+    def __init__(self, auth_service, permset: set[str] | None = None):
         super().__init__()
         self.auth = auth_service
         self.permset = permset or set()
         self._build_ui()
-        self.apply_perm_rules()
+        self._apply_perm_rules()          # <- NOME CORRETO
         self._refresh()
 
     def _build_ui(self):
@@ -43,7 +42,6 @@ class UsersView(QWidget):
         self.btn_del.clicked.connect(self._delete)
         self.btn_refresh.clicked.connect(self._refresh)
 
-
     def _apply_perm_rules(self):
         self.btn_new.setEnabled("users.create" in self.permset)
         self.btn_edit.setEnabled("users.update" in self.permset)
@@ -72,11 +70,17 @@ class UsersView(QWidget):
         return int(item.text()) if item else None
 
     def _new(self):
+        if "users.create" not in self.permset:
+            QMessageBox.warning(self, "Acesso negado", "Sem permissão para criar usuários.")
+            return
         dlg = UserFormDialog(self.auth, self)
         if dlg.exec():
             self._refresh()
 
     def _edit(self):
+        if "users.update" not in self.permset:
+            QMessageBox.warning(self, "Acesso negado", "Sem permissão para editar usuários.")
+            return
         uid = self._current_user_id()
         if uid is None:
             QMessageBox.information(self, "Editar", "Selecione um usuário.")
@@ -87,6 +91,9 @@ class UsersView(QWidget):
             self._refresh()
 
     def _delete(self):
+        if "users.delete" not in self.permset:
+            QMessageBox.warning(self, "Acesso negado", "Sem permissão para excluir usuários.")
+            return
         uid = self._current_user_id()
         if uid is None:
             QMessageBox.information(self, "Excluir", "Selecione um usuário.")

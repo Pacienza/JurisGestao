@@ -1,12 +1,15 @@
 from __future__ import annotations
+
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 from .db import SessionLocal, engine
 from .models import Base, User, Role
 from .security import hash_password, verify_password
 from .rbac import RBACService
 
+# Papéis padrão
 DEFAULT_ROLES = [
     ("admin", "Administrador do sistema"),
     ("advogado", "Usuário advogado com acesso à própria agenda e clientes"),
@@ -14,10 +17,11 @@ DEFAULT_ROLES = [
     ("estagiario", "Apoio com permissões restritas"),
 ]
 
+
 class AuthService:
     def __init__(self, session_factory=SessionLocal):
         self.session_factory = session_factory
-        self.rbac = RBACService(session_factory)
+        self._rbac = RBACService(session_factory)
 
     # --- schema ---
     @staticmethod
@@ -25,17 +29,16 @@ class AuthService:
         Base.metadata.create_all(bind=engine)
 
     def reset_database(self) -> None:
-        """DEV ONLY: drop_all + create_all."""
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
 
     # --- roles ---
     def get_or_create_roles(self) -> list[Role]:
         with self.session_factory() as db:
-            roles = {r.name: r for r in db.scalars(select(Role)).all()}
+            existing = {r.name: r for r in db.scalars(select(Role)).all()}
             changed = False
             for name, desc in DEFAULT_ROLES:
-                if name not in roles:
+                if name not in existing:
                     db.add(Role(name=name, description=desc))
                     changed = True
             if changed:
@@ -66,9 +69,12 @@ class AuthService:
             return user
 
     def authenticate(self, username_or_email: str, password: str) -> Optional[User]:
+        """Retorna o User com roles/permissions *pré-carregados* se a senha bater."""
         with self.session_factory() as db:
-            stmt = select(User).where(
-                (User.username == username_or_email) | (User.email == username_or_email)
+            stmt = (
+                select(User)
+                .options(selectinload(User.roles).selectinload(Role.permissions))
+                .where((User.username == username_or_email) | (User.email == username_or_email))
             )
             user = db.scalars(stmt).first()
             if not user or not user.is_active:
@@ -78,25 +84,43 @@ class AuthService:
             return None
 
     def list_users(self) -> list[tuple[int, str, str, bool]]:
-        """[(id, username, email, is_active), ...] — evita carregar papéis aqui."""
+        """Retorna somente colunas básicas para evitar duplicações por join."""
         with self.session_factory() as db:
-            rows = db.execute(select(User.id, User.username, User.email, User.is_active)
-                              .order_by(User.id)).all()
+            rows = db.execute(
+                select(User.id, User.username, User.email, User.is_active).order_by(User.id)
+            ).all()
             return [(r[0], r[1], r[2], r[3]) for r in rows]
+
+    def list_users_by_role(self, role_name: str) -> list[User]:
+        """Lista usuários que possuem determinado papel (ex.: 'advogado')."""
+        with self.session_factory() as db:
+            result = db.execute(
+                select(User)
+                .join(User.roles)
+                .where(Role.name == role_name)
+                .order_by(User.username)
+            ).unique().scalars().all()
+            return result
 
     def get_user(self, user_id: int) -> Optional[User]:
         with self.session_factory() as db:
             return db.get(User, user_id)
 
     def update_user(
-        self, user_id: int, *, username: Optional[str]=None, email: Optional[str]=None,
-        password: Optional[str]=None, is_active: Optional[bool]=None,
-        roles: Optional[list[str]]=None
+        self,
+        user_id: int,
+        *,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+        password: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        roles: Optional[list[str]] = None,
     ) -> User:
         with self.session_factory() as db:
             u = db.get(User, user_id)
             if not u:
                 raise ValueError("Usuário não encontrado")
+
             if username is not None:
                 u.username = username
             if email is not None:
@@ -108,6 +132,7 @@ class AuthService:
             if roles is not None:
                 role_objs = db.scalars(select(Role).where(Role.name.in_(roles))).all()
                 u.roles = list(role_objs)
+
             try:
                 db.commit()
             except IntegrityError as e:
@@ -124,26 +149,36 @@ class AuthService:
             db.delete(u)
             db.commit()
 
-    # --- seed ---
+    # --- seed inicial (papéis, permissões + 1 usuário por papel) ---
     def seed_one_actor_per_role(self) -> dict[str, str]:
-        """Cria 1 usuário por role, se ainda não existir. Retorna {username: role}."""
         created: dict[str, str] = {}
+
+        # garante papéis e permissões
         self.get_or_create_roles()
+        self._rbac.get_or_create_permissions()
+        self._rbac.assign_default_permissions_to_roles()
+
         defaults = [
-            ("admin", "admin@local", "admin", ["admin"]),
-            ("advogada", "advogada@local", "advogada", ["advogado"]),
-            ("recepcao", "recepcao@local", "recepcao", ["recepcao"]),
-            ("estagiario", "estagiario@local", "estagiario", ["estagiario"]),
-        ]
+    ("admin", "admin@local", "admin", ["admin"]),
+    ("advogada", "advogada@local", "advogada", ["advogado"]),  # << FIX AQUI
+    ("recepcao", "recepcao@local", "recepcao", ["recepcao"]),
+    ("estagiario", "estagiario@local", "estagiario", ["estagiario"]),
+]
+
         with self.session_factory() as db:
             for username, email, pwd, roles in defaults:
                 exists = db.scalars(select(User).where(User.username == username)).first()
                 if exists:
                     continue
                 role_objs = db.scalars(select(Role).where(Role.name.in_(roles))).all()
-                u = User(username=username, email=email,
-                        password_hash=hash_password(pwd), roles=list(role_objs))
+                u = User(
+                    username=username,
+                    email=email,
+                    password_hash=hash_password(pwd),
+                    roles=list(role_objs),
+                )
                 db.add(u)
                 created[username] = roles[0]
             db.commit()
         return created
+

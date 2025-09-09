@@ -75,7 +75,7 @@ class UserFormDialog(QDialog):
                 self.auth.create_user(username=username, email=email, password=password, roles=roles)
             else:
                 self.auth.update_user(self.user.id, username=username, email=email,
-                                      password=password or None, is_active=is_active, roles=roles)
+                                    password=password or None, is_active=is_active, roles=roles)
         except ValueError as e:
             QMessageBox.critical(self, "Erro ao salvar", str(e))
             return

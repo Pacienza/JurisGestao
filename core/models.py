@@ -71,3 +71,22 @@ class User(Base):
 
     def __repr__(self) -> str:
         return f"<User {self.username}>"
+    
+class Client(Base):
+    __tablename__ = "clients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    document: Mapped[str | None] = mapped_column(String(20), nullable=True)  # CPF/CNPJ
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    responsible_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    created_by: Mapped[User | None] = relationship("User", foreign_keys=[created_by_id], lazy="selectin")
+    responsible: Mapped[User | None] = relationship("User", foreign_keys=[responsible_id], lazy="selectin")

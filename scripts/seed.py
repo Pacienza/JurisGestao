@@ -38,6 +38,8 @@ def main():
             for uid, uname, email, active in users:
                 print(f" - [{uid}] {uname} <{email}> ativo={active}")
 
+        
+
 if __name__ == "__main__":
     main()
 
@@ -53,3 +55,4 @@ python scripts/seed.py --seed
 python scripts/seed.py --list
 
 """
+

@@ -11,7 +11,7 @@ class LoginView(QWidget):
     def __init__(self, auth_service, on_login_ok):
         super().__init__()
         self.auth_service = auth_service
-        self.on_login_ok = on_login_ok
+        self.on_login_ok = on_login_ok  # callback recebe 'account'
         self._build_ui()
 
     def _build_ui(self):
@@ -69,7 +69,7 @@ class LoginView(QWidget):
         root.addWidget(wrapper, alignment=Qt.AlignHCenter)
         root.addStretch(1)
 
-def _handle_login(self):
+    def _handle_login(self):
         user = self.input_user.text().strip()
         pwd = self.input_pass.text()
         if not user or not pwd:
@@ -78,6 +78,7 @@ def _handle_login(self):
         account = self.auth_service.authenticate(user, pwd)
         if account:
             self.lbl_status.setText("")
+            # agora o callback recebe o objeto user inteiro
             self.on_login_ok(account=account)
         else:
             self.lbl_status.setText("Credenciais inválidas.")

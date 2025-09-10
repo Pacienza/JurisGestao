@@ -6,12 +6,12 @@ import os
 '''
 COMENTAR O BLOCO ABAIXO ATIVA O MODO DEBUG/DEV
 '''
-# DEV_MODE = os.getenv("JURIS_DEV", "0") not in {"0", "", "false", "False"}
+DEV_MODE = os.getenv("JURIS_DEV", "0") not in {"0", "", "false", "False"}
 
 
 
-'''
-COMENTAR DAQUI PRA BAIXO ATIVA O MODO PRODUÇÃO/DEPLOY
-'''
-DEV_MODE = os.getenv("JURIS_DEV", "1")
-JURIS_DEV="1"
+# '''
+# COMENTAR DAQUI PRA BAIXO ATIVA O MODO PRODUÇÃO/DEPLOY
+# '''
+# DEV_MODE = os.getenv("JURIS_DEV", "1")
+# JURIS_DEV="1"

@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
+import bcrypt
 from .db import SessionLocal, engine
 from .models import Base, User, Role
 from .security import hash_password, verify_password
 from .rbac import RBACService
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 # Papéis padrão
 DEFAULT_ROLES = [
@@ -17,16 +24,25 @@ DEFAULT_ROLES = [
     ("estagiario", "Apoio com permissões restritas"),
 ]
 
-
 class AuthService:
     def __init__(self, session_factory=SessionLocal):
         self.session_factory = session_factory
         self._rbac = RBACService(session_factory)
 
     # --- schema ---
-    @staticmethod
-    def create_schema_if_needed() -> None:
+    def create_schema_if_needed(self) -> None:
         Base.metadata.create_all(bind=engine)
+    # Força criação física com escrita garantida
+        try:
+            with self.session_factory() as db:
+                db.execute(text("CREATE TABLE IF NOT EXISTS __init_check (id INTEGER PRIMARY KEY AUTOINCREMENT)"))
+                result = db.execute(text("SELECT COUNT(*) FROM __init_check"))
+                if result.scalar_one() == 0:
+                    db.execute(text("INSERT INTO __init_check DEFAULT VALUES"))
+                db.commit()
+        except Exception as e:
+            print(f"[ERRO] Não foi possível garantir a criação do banco: {e}")
+
 
     def reset_database(self) -> None:
         Base.metadata.drop_all(bind=engine)
@@ -159,11 +175,11 @@ class AuthService:
         self._rbac.assign_default_permissions_to_roles()
 
         defaults = [
-    ("admin", "admin@local", "admin", ["admin"]),
-    ("advogada", "advogada@local", "advogada", ["advogado"]),  # << FIX AQUI
-    ("recepcao", "recepcao@local", "recepcao", ["recepcao"]),
-    ("estagiario", "estagiario@local", "estagiario", ["estagiario"]),
-]
+            ("admin", "admin@local", "admin", ["admin"]),
+            ("advogada", "advogada@local", "advogada", ["advogado"]),
+            ("recepcao", "recepcao@local", "recepcao", ["recepcao"]),
+            ("estagiario", "estagiario@local", "estagiario", ["estagiario"]),
+        ]
 
         with self.session_factory() as db:
             for username, email, pwd, roles in defaults:
@@ -182,3 +198,24 @@ class AuthService:
             db.commit()
         return created
 
+    def ensure_root_user(self):
+            self.get_or_create_roles()
+            with self.session_factory() as db:
+                from .models import User, Role
+                from sqlalchemy import select
+                root = db.scalars(select(User).where(User.username == "root")).first()
+                if not root:
+                    admin_role = db.scalars(select(Role).where(Role.name == "admin")).first()
+                    if not admin_role:
+                        admin_role = Role(name="admin", description="Administrador do sistema")
+                        db.add(admin_role)
+                        db.commit()
+                    root = User(
+                        username="root",
+                        email="root@local",
+                        password_hash=hash_password("sudo"),
+                        roles=[admin_role],
+                        is_active=True,
+                    )
+                    db.add(root)
+                    db.commit()

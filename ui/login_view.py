@@ -1,84 +1,105 @@
-from __future__ import annotations
-from PySide6.QtCore import Qt, QRegularExpression
-from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QHBoxLayout, QFormLayout,
-    QCheckBox, QFrame
+    QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton,
+    QHBoxLayout, QSpacerItem, QSizePolicy, QStyle
 )
+from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt
+
 
 class LoginView(QWidget):
     def __init__(self, auth_service, on_login_ok):
         super().__init__()
         self.auth_service = auth_service
-        self.on_login_ok = on_login_ok  # callback recebe 'account'
+        self.on_login_ok = on_login_ok
+        self.resize(500, 360)
+        self.setMinimumSize(400, 300)
+        self.setWindowTitle("Login - JurisGestão")
+
         self._build_ui()
 
     def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(32, 32, 32, 32)
-        root.setSpacing(16)
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #F5F5F5;
+            }
+            QLabel {
+                color: #333;
+            }
+            QLineEdit {
+                padding: 6px;
+                border: 1px solid #CCC;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QPushButton {
+                padding: 8px 16px;
+                background-color: #005B96;
+                color: white;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #007ACC;
+            }
+        """)
 
-        wrapper = QFrame()
-        card = QVBoxLayout(wrapper)
-        card.setContentsMargins(32, 32, 32, 32)
-        card.setSpacing(12)
 
-        title = QLabel("JurisGestão CRM")
-        subtitle = QLabel("Acesse com suas credenciais")
-        title.setObjectName("title")
-        subtitle.setObjectName("subtitle")
+        font = QFont("Segoe UI", 10)
+        self.setFont(font)
 
-        form = QFormLayout()
-        self.input_user = QLineEdit()
-        self.input_user.setPlaceholderText("Usuário ou e-mail")
-        regex = QRegularExpression(r"^([\w\.-]+@[\w\.-]+\.[A-Za-z]{2,}|[\w\.-]{3,})$")
-        self.input_user.setValidator(QRegularExpressionValidator(regex, self))
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
 
-        self.input_pass = QLineEdit()
-        self.input_pass.setPlaceholderText("senha")
-        self.input_pass.setEchoMode(QLineEdit.Password)
+        layout.addSpacerItem(QSpacerItem(0, 80, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        self.chk_show = QCheckBox("mostrar senha")
-        self.chk_show.toggled.connect(
-            lambda c: self.input_pass.setEchoMode(QLineEdit.Normal if c else QLineEdit.Password)
-        )
+        # Título
+        title = QLabel("JurisGestão")
+        title.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
 
-        self.btn_login = QPushButton("Entrar")
-        self.btn_login.setDefault(True)
-        self.btn_login.clicked.connect(self._handle_login)
+        layout.addSpacing(20)
 
-        self.lbl_status = QLabel("")
-        self.lbl_status.setObjectName("status")
+        # Campo de usuário
+        user_layout = QHBoxLayout()
+        user_icon = QLabel()
+        user_icon.setPixmap(self.style().standardIcon(QStyle.SP_FileIcon).pixmap(20, 20))
+        user_layout.addWidget(user_icon)
 
-        form.addRow("Usuário", self.input_user)
-        form.addRow("Senha", self.input_pass)
-        form.addRow("", self.chk_show)
+        self.username_input = QLineEdit()
+        self.username_input.setPlaceholderText("Usuário ou e-mail")
+        user_layout.addWidget(self.username_input)
+        layout.addLayout(user_layout)
 
-        btns = QHBoxLayout()
-        btns.addStretch(1)
-        btns.addWidget(self.btn_login)
+        # Campo de senha
+        pass_layout = QHBoxLayout()
+        pass_icon = QLabel()
+        pass_icon.setPixmap(self.style().standardIcon(QStyle.SP_MessageBoxWarning).pixmap(20, 20))
+        pass_layout.addWidget(pass_icon)
 
-        card.addWidget(title)
-        card.addWidget(subtitle)
-        card.addLayout(form)
-        card.addLayout(btns)
-        card.addWidget(self.lbl_status)
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setPlaceholderText("Senha")
+        pass_layout.addWidget(self.password_input)
 
-        root.addStretch(1)
-        root.addWidget(wrapper, alignment=Qt.AlignHCenter)
-        root.addStretch(1)
+        self.password_input.returnPressed.connect(self._handle_login)
+        layout.addLayout(pass_layout)
+
+        # Botão de login
+        self.login_btn = QPushButton(" Entrar")
+        self.login_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogOkButton))
+        self.login_btn.clicked.connect(self._handle_login)
+        layout.addWidget(self.login_btn)
+
+        layout.addSpacerItem(QSpacerItem(0, 80, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
     def _handle_login(self):
-        user = self.input_user.text().strip()
-        pwd = self.input_pass.text()
-        if not user or not pwd:
-            self.lbl_status.setText("Preencha usuário e senha.")
-            return
+        user = self.username_input.text()
+        pwd = self.password_input.text()
         account = self.auth_service.authenticate(user, pwd)
         if account:
-            self.lbl_status.setText("")
-            # agora o callback recebe o objeto user inteiro
-            self.on_login_ok(account=account)
+            self.on_login_ok(account)
         else:
-            self.lbl_status.setText("Credenciais inválidas.")
+            self.username_input.clear()
+            self.password_input.clear()
+            self.username_input.setFocus()

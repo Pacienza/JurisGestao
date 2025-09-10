@@ -28,6 +28,17 @@ class ClientService:
                 return []
             return db.scalars(stmt.order_by(Client.id.desc())).all()
 
+    def list_clients_for_user(self, current_user, permset: set[str]) -> list[tuple[int, str]]:
+        """Admin/quem tem view_all vê todos; advogado vê apenas próprios (responsible_id)."""
+        with self.session_factory() as db:
+            from sqlalchemy import select
+            from .models import Client
+            stmt = select(Client.id, Client.name)
+            if "clients.view_all" not in permset:
+                stmt = stmt.where(Client.responsible_id == current_user.id)
+            rows = db.execute(stmt.order_by(Client.name)).all()
+            return [(r[0], r[1]) for r in rows]
+
     def create_client(
         self, *, name: str, email: str | None, phone: str | None,
         document: str | None, notes: str | None, responsible_id: int | None,

@@ -1,28 +1,28 @@
+from __future__ import annotations
 import sys
 from PySide6.QtWidgets import QApplication
+from ui.login_view import LoginView
 from ui.root_window import RootWindow
 from core.auth import AuthService
-from core.config import DEV_MODE
-from core.rbac import RBACService
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("JurisGestão")
-    app.setOrganizationName("Seu Escritório") # Personalizar de acordo com escritório do cliente
+    app.setOrganizationName("Bento e Gervásio Advocacia")
 
     auth = AuthService()
     auth.create_schema_if_needed()
+    auth.ensure_root_user()  # cria root se necessário
 
-    if DEV_MODE:
-        #Garante roles, permissões e atribuições padrão no ambiente de desenvolvimento
-        auth.get_or_create_roles()
-        rbac = RBACService()
-        rbac.get_or_create_permissions()
-        rbac.assign_default_permissions_to_roles()
-        auth.seed_one_actor_per_role()
+    def on_login_ok(user):
+        window = RootWindow(auth_service=auth)
+        window.current_user = user
+        window._go_home(user)
+        window.show()
 
-    win = RootWindow(auth_service=auth)
-    win.show()
+    login = LoginView(auth_service=auth, on_login_ok=on_login_ok)
+    login.show()
+
     sys.exit(app.exec())
 
 if __name__ == "__main__":

@@ -21,12 +21,40 @@ DEFAULT_PERMISSIONS: list[tuple[str, str]] = [
     ("clients.assign_responsible", "Atribuir responsável do cliente"),  # <- NOVA
 ]
 
+
 ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
     "admin": ["*"],
-    "recepcao": ["users.view", "clients.view_all", "clients.assign_responsible"],
-    "estagiario": ["users.view"],
-    "advogado": ["clients.create", "clients.view_own", "clients.update_own", "clients.delete_own"],
+
+    "recepcao": [
+        "users.view",
+        "clients.view_all",
+        "clients.assign_responsible",
+        "agenda.view",
+        "agenda.create",
+        "agenda.edit_all",
+        "agenda.delete_all"
+    ],
+
+    "estagiario": [
+        "users.view",
+        "agenda.view"
+    ],
+
+    "advogado": [
+        "clients.create",
+        "clients.view_own",
+        "clients.update_own",
+        "clients.delete_own",
+        "clients.view_all",
+        "clients.update_all",
+        "clients.edit_all",
+        "agenda.view",
+        "agenda.create",
+        "agenda.edit_own",
+        "agenda.delete_own"
+    ],
 }
+
 
 class RBACService:
     def __init__(self, session_factory=SessionLocal):
@@ -59,7 +87,7 @@ class RBACService:
                         role.permissions.append(p)
             db.commit()
 
-    # (métodos sync_permissions / effective_permissions / can) — mantenha como estavam
+    # (métodos sync_permissions / effective_permissions / can) — manter como esta para efetividade das roles
     def effective_permissions(self, user: User) -> Set[str]:
         names: Set[str] = set()
         for role in user.roles:
